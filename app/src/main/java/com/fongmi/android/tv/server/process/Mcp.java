@@ -15,6 +15,7 @@ import com.fongmi.android.tv.utils.WebViewUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -24,7 +25,7 @@ import fi.iki.elonen.NanoHTTPD.IHTTPSession;
 import fi.iki.elonen.NanoHTTPD.Response;
 
 /**
- * WUTV MCP Server - 让外部 AI (Operit) 完全支配壳内能力
+ * WUTV MCP Server v1.1 - 让外部 AI (Operit) 完全支配壳内能力
  *
  * 端点: POST /mcp (JSON-RPC 2.0), 鉴权头 X-MCP-Token
  * 工具组:
@@ -32,6 +33,13 @@ import fi.iki.elonen.NanoHTTPD.Response;
  *   webview: webview_fetch/webview_eval/webview_cookies (壳内浏览器,制作规则)
  *   player : player_state/player_stop
  *   debug  : debug_logs / config_sites
+ *
+ * SiteApi 真实签名 (源码核对):
+ *   homeContent(Site)
+ *   categoryContent(String key, String tid, String page, boolean filter, HashMap extend)
+ *   searchContent(Site, keyword, quick, page)
+ *   detailContent(key, id) / detailContent(key, id, refresh)
+ *   playerContent(key, flag, id) / playerContent(key, flag, id, playerType)
  */
 public class Mcp implements Process {
 
@@ -47,7 +55,7 @@ public class Mcp implements Process {
         if (!"POST".equals(session.getMethod().name())) {
             JsonObject info = new JsonObject();
             info.addProperty("server", "WUTV-MCP");
-            info.addProperty("version", "1.0");
+            info.addProperty("version", "1.1");
             info.addProperty("usage", "POST JSON-RPC 2.0 to /mcp with header X-MCP-Token");
             return Nano.ok(info.toString());
         }
@@ -76,7 +84,7 @@ public class Mcp implements Process {
             switch (method) {
                 case "initialize":
                     result.addProperty("protocolVersion", "2024-11-05");
-                    result.addProperty("serverInfo", "WUTV-MCP/1.0");
+                    result.addProperty("serverInfo", "WUTV-MCP/1.1");
                     break;
                 case "tools/list":
                     result.add("tools", toolsList());
@@ -181,7 +189,7 @@ public class Mcp implements Process {
         final CountDownLatch latch = new CountDownLatch(1);
         App.post(() -> {
             try {
-                Result r = SiteApi.homeContent(VodConfig.get().getSite(key), true);
+                Result r = SiteApi.homeContent(VodConfig.get().getSite(key));
                 ref.set(r.toString());
             } catch (Throwable e) {
                 ref.set("{\"error\":\"" + type(e) + ":" + msg(e) + "\"}");
@@ -201,14 +209,15 @@ public class Mcp implements Process {
         final CountDownLatch latch = new CountDownLatch(1);
         App.post(() -> {
             try {
-                java.util.HashMap<String,String> map = new java.util.HashMap<>();
+                HashMap<String,String> map = new HashMap<>();
                 try {
                     for (Map.Entry<String, com.google.gson.JsonElement> en
                             : com.google.gson.JsonParser.parseString(ext).getAsJsonObject().entrySet()) {
                         map.put(en.getKey(), en.getValue().isJsonNull() ? "" : en.getValue().getAsString());
                     }
                 } catch (Exception ignored) {}
-                Result r = SiteApi.categoryContent(key, tid, pg.equals("1"), map, pg);
+                // 真实签名: categoryContent(key, tid, page:String, filter:boolean, extend:HashMap)
+                Result r = SiteApi.categoryContent(key, tid, pg, true, map);
                 ref.set(r.toString());
             } catch (Throwable e) {
                 ref.set("{\"error\":\"" + type(e) + ":" + msg(e) + "\"}");
