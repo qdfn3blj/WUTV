@@ -25,21 +25,9 @@ import fi.iki.elonen.NanoHTTPD.IHTTPSession;
 import fi.iki.elonen.NanoHTTPD.Response;
 
 /**
- * WUTV MCP Server v1.1 - 让外部 AI (Operit) 完全支配壳内能力
+ * WUTV MCP Server v1.2 - 让外部 AI (Operit) 完全支配壳内能力
  *
- * 端点: POST /mcp (JSON-RPC 2.0), 鉴权头 X-MCP-Token
- * 工具组:
- *   spider : site_home/site_category/site_search/site_detail/site_player (走壳网络栈,过CF)
- *   webview: webview_fetch/webview_eval/webview_cookies (壳内浏览器,制作规则)
- *   player : player_state/player_stop
- *   debug  : debug_logs / config_sites
- *
- * SiteApi 真实签名 (源码核对):
- *   homeContent(Site)
- *   categoryContent(String key, String tid, String page, boolean filter, HashMap extend)
- *   searchContent(Site, keyword, quick, page)
- *   detailContent(key, id) / detailContent(key, id, refresh)
- *   playerContent(key, flag, id) / playerContent(key, flag, id, playerType)
+ * v1.2: WebView 改用 Activity 上下文创建(硬件渲染), 修复无界面渲染失败
  */
 public class Mcp implements Process {
 
@@ -55,7 +43,7 @@ public class Mcp implements Process {
         if (!"POST".equals(session.getMethod().name())) {
             JsonObject info = new JsonObject();
             info.addProperty("server", "WUTV-MCP");
-            info.addProperty("version", "1.1");
+            info.addProperty("version", "1.2");
             info.addProperty("usage", "POST JSON-RPC 2.0 to /mcp with header X-MCP-Token");
             return Nano.ok(info.toString());
         }
@@ -84,7 +72,7 @@ public class Mcp implements Process {
             switch (method) {
                 case "initialize":
                     result.addProperty("protocolVersion", "2024-11-05");
-                    result.addProperty("serverInfo", "WUTV-MCP/1.1");
+                    result.addProperty("serverInfo", "WUTV-MCP/1.2");
                     break;
                 case "tools/list":
                     result.add("tools", toolsList());
@@ -216,7 +204,6 @@ public class Mcp implements Process {
                         map.put(en.getKey(), en.getValue().isJsonNull() ? "" : en.getValue().getAsString());
                     }
                 } catch (Exception ignored) {}
-                // 真实签名: categoryContent(key, tid, page:String, filter:boolean, extend:HashMap)
                 Result r = SiteApi.categoryContent(key, tid, pg, true, map);
                 ref.set(r.toString());
             } catch (Throwable e) {
@@ -296,7 +283,9 @@ public class Mcp implements Process {
         App.post(() -> {
             WebView wv = null;
             try {
-                wv = new WebView(App.get());
+                android.app.Activity act = App.activity();
+                wv = new WebView(act != null ? act : App.get());
+                if (act != null) act.addContentView(wv, new android.view.ViewGroup.LayoutParams(2, 2));
                 WebViewUtil.configureBase(wv, "mcp-fetch");
                 wv.getSettings().setUserAgentString(
                         "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36");
@@ -345,7 +334,9 @@ public class Mcp implements Process {
         App.post(() -> {
             WebView wv = null;
             try {
-                wv = new WebView(App.get());
+                android.app.Activity act = App.activity();
+                wv = new WebView(act != null ? act : App.get());
+                if (act != null) act.addContentView(wv, new android.view.ViewGroup.LayoutParams(2, 2));
                 WebViewUtil.configureBase(wv, "mcp-eval");
                 final WebView fv = wv;
                 final CountDownLatch loaded = new CountDownLatch(1);
