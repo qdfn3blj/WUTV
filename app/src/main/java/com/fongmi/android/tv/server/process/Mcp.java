@@ -25,10 +25,8 @@ import fi.iki.elonen.NanoHTTPD.IHTTPSession;
 import fi.iki.elonen.NanoHTTPD.Response;
 
 /**
- * WUTV MCP Server v1.3 - 让外部 AI (Operit) 完全支配壳内能力
- *
- * v1.3: WebView 离屏模式 - 不挂视图树, 手动layout(1080x1920) + setNetworkAvailable(true)
- *       修复挂载2x2视图导致渲染暂停、页面加载不启动的问题
+ * WUTV MCP Server v1.4
+ * v1.4: 对齐CustomWebView配置 - WebChromeClient + SSL proceed + 第三方Cookie
  */
 public class Mcp implements Process {
 
@@ -44,7 +42,7 @@ public class Mcp implements Process {
         if (!"POST".equals(session.getMethod().name())) {
             JsonObject info = new JsonObject();
             info.addProperty("server", "WUTV-MCP");
-            info.addProperty("version", "1.3");
+            info.addProperty("version", "1.4");
             info.addProperty("usage", "POST JSON-RPC 2.0 to /mcp with header X-MCP-Token");
             return Nano.ok(info.toString());
         }
@@ -73,7 +71,7 @@ public class Mcp implements Process {
             switch (method) {
                 case "initialize":
                     result.addProperty("protocolVersion", "2024-11-05");
-                    result.addProperty("serverInfo", "WUTV-MCP/1.3");
+                    result.addProperty("serverInfo", "WUTV-MCP/1.4");
                     break;
                 case "tools/list":
                     result.add("tools", toolsList());
@@ -289,6 +287,14 @@ public class Mcp implements Process {
                 wv.setNetworkAvailable(true);
                 wv.layout(0, 0, 1080, 1920);
                 WebViewUtil.configureBase(wv, "mcp-fetch");
+                android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
+                wv.setWebChromeClient(new android.webkit.WebChromeClient());
+                wv.setWebViewClient(new android.webkit.WebViewClient() {
+                    @Override
+                    public void onReceivedSslError(android.webkit.WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
+                        handler.proceed();
+                    }
+                });
                 wv.getSettings().setUserAgentString(
                         "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36");
                 final WebView fv = wv;
@@ -341,10 +347,16 @@ public class Mcp implements Process {
                 wv.setNetworkAvailable(true);
                 wv.layout(0, 0, 1080, 1920);
                 WebViewUtil.configureBase(wv, "mcp-eval");
+                android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
+                wv.setWebChromeClient(new android.webkit.WebChromeClient());
                 final WebView fv = wv;
                 final CountDownLatch loaded = new CountDownLatch(1);
                 wv.setWebViewClient(new android.webkit.WebViewClient() {
                     @Override public void onPageFinished(android.webkit.WebView v, String u) { loaded.countDown(); }
+                    @Override
+                    public void onReceivedSslError(android.webkit.WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
+                        handler.proceed();
+                    }
                 });
                 wv.loadUrl(url);
                 loaded.await(waitMs, TimeUnit.MILLISECONDS);
