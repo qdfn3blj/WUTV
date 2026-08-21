@@ -100,10 +100,22 @@ public class Nano extends NanoHTTPD {
         return !url.startsWith("/debug/");
     }
 
+    /**
+     * 解析POST body。
+     * v1.2修复: 无charset的Content-Type(如 application/json)强制补 charset=utf-8,
+     * 否则 NanoHTTPD 按 ISO-8859-1 解码导致中文乱码(MCP keyword 乱码根因)。
+     */
     private void parse(IHTTPSession session, Map<String, String> files) {
         try {
             String ct = session.getHeaders().get("content-type");
-            if (ct != null) session.getHeaders().put("content-type", ct.replace("multipart/form-data", "multipart/form-data; charset=utf-8"));
+            if (ct != null) {
+                if (ct.contains("multipart/form-data")) {
+                    ct = ct.replace("multipart/form-data", "multipart/form-data; charset=utf-8");
+                } else if (!ct.toLowerCase().contains("charset=")) {
+                    ct = ct + "; charset=utf-8";
+                }
+                session.getHeaders().put("content-type", ct);
+            }
             session.parseBody(files);
         } catch (Exception ignored) {
         }
