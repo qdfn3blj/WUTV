@@ -25,9 +25,10 @@ import fi.iki.elonen.NanoHTTPD.IHTTPSession;
 import fi.iki.elonen.NanoHTTPD.Response;
 
 /**
- * WUTV MCP Server v1.2 - 让外部 AI (Operit) 完全支配壳内能力
+ * WUTV MCP Server v1.3 - 让外部 AI (Operit) 完全支配壳内能力
  *
- * v1.2: WebView 改用 Activity 上下文创建(硬件渲染), 修复无界面渲染失败
+ * v1.3: WebView 离屏模式 - 不挂视图树, 手动layout(1080x1920) + setNetworkAvailable(true)
+ *       修复挂载2x2视图导致渲染暂停、页面加载不启动的问题
  */
 public class Mcp implements Process {
 
@@ -43,7 +44,7 @@ public class Mcp implements Process {
         if (!"POST".equals(session.getMethod().name())) {
             JsonObject info = new JsonObject();
             info.addProperty("server", "WUTV-MCP");
-            info.addProperty("version", "1.2");
+            info.addProperty("version", "1.3");
             info.addProperty("usage", "POST JSON-RPC 2.0 to /mcp with header X-MCP-Token");
             return Nano.ok(info.toString());
         }
@@ -72,7 +73,7 @@ public class Mcp implements Process {
             switch (method) {
                 case "initialize":
                     result.addProperty("protocolVersion", "2024-11-05");
-                    result.addProperty("serverInfo", "WUTV-MCP/1.2");
+                    result.addProperty("serverInfo", "WUTV-MCP/1.3");
                     break;
                 case "tools/list":
                     result.add("tools", toolsList());
@@ -285,7 +286,8 @@ public class Mcp implements Process {
             try {
                 android.app.Activity act = App.activity();
                 wv = new WebView(act != null ? act : App.get());
-                if (act != null) act.addContentView(wv, new android.view.ViewGroup.LayoutParams(2, 2));
+                wv.setNetworkAvailable(true);
+                wv.layout(0, 0, 1080, 1920);
                 WebViewUtil.configureBase(wv, "mcp-fetch");
                 wv.getSettings().setUserAgentString(
                         "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36");
@@ -336,7 +338,8 @@ public class Mcp implements Process {
             try {
                 android.app.Activity act = App.activity();
                 wv = new WebView(act != null ? act : App.get());
-                if (act != null) act.addContentView(wv, new android.view.ViewGroup.LayoutParams(2, 2));
+                wv.setNetworkAvailable(true);
+                wv.layout(0, 0, 1080, 1920);
                 WebViewUtil.configureBase(wv, "mcp-eval");
                 final WebView fv = wv;
                 final CountDownLatch loaded = new CountDownLatch(1);
